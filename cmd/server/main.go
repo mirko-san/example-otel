@@ -6,12 +6,20 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
+
+func getEnv(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return fallback
+}
 
 // Implement an HTTP Handler func to be instrumented
 func helloHandler(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +69,8 @@ func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
 }
 
 func main() {
+	serverPort := getEnv("EXAMPLE_SERVER_PORT", "3030")
+
 	tp, err := initTracer()
 	if err != nil {
 		log.Fatalf("error setting up OTel SDK - %e", err)
@@ -77,5 +87,5 @@ func main() {
 	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler), "hello"))
 	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
 	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler), "httpbin"))
-	log.Fatal(http.ListenAndServe(":3030", mux))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serverPort), mux))
 }

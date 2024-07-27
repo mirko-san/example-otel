@@ -55,7 +55,7 @@ func main() {
 		}
 	}()
 
-	url := flag.String("server", "http://localhost:7777/hello", "server url")
+	url := flag.String("server", "http://localhost:3030/hello", "server url")
 	flag.Parse()
 
 	client := http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
