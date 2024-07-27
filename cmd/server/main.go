@@ -13,20 +13,12 @@ import (
 )
 
 // Implement an HTTP Handler func to be instrumented
-func httpHandler(w http.ResponseWriter, r *http.Request) {
+func helloHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello, World")
 }
 
 func errorHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-}
-
-// Wrap the HTTP handler func with OTel HTTP instrumentation
-func wrapHandler() {
-	handler := http.HandlerFunc(httpHandler)
-	wrappedHandler := otelhttp.NewHandler(handler, "hello")
-	http.Handle("/hello", wrappedHandler)
-	http.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
 }
 
 var tp *sdktrace.TracerProvider
@@ -64,6 +56,9 @@ func main() {
 	}()
 
 	// Initialize HTTP handler instrumentation
-	wrapHandler()
-	log.Fatal(http.ListenAndServe(":3030", nil))
+	mux := http.NewServeMux()
+
+	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler), "hello"))
+	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
+	log.Fatal(http.ListenAndServe(":3030", mux))
 }
