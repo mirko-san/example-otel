@@ -17,11 +17,16 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello, World")
 }
 
+func errorHandler(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
 // Wrap the HTTP handler func with OTel HTTP instrumentation
 func wrapHandler() {
 	handler := http.HandlerFunc(httpHandler)
 	wrappedHandler := otelhttp.NewHandler(handler, "hello")
 	http.Handle("/hello", wrappedHandler)
+	http.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
 }
 
 var tp *sdktrace.TracerProvider
