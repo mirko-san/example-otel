@@ -4,8 +4,11 @@ import (
     "fmt"
     "log"
     "net/http"
+		"context"
 
-    "github.com/honeycombio/otel-config-go/otelconfig"
+		"go.opentelemetry.io/otel"
+		sdktrace "go.opentelemetry.io/otel/sdk/trace"
+		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
     "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -21,13 +24,39 @@ func wrapHandler() {
     http.Handle("/hello", wrappedHandler)
 }
 
+var tp *sdktrace.TracerProvider
+
+// initTracer creates and registers trace provider instance.
+func initTracer() (*sdktrace.TracerProvider, error) {
+	ctx := context.Background()
+
+	exp, err := newExporter(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize stdouttrace exporter: %w", err)
+	}
+	bsp := sdktrace.NewBatchSpanProcessor(exp)
+	tp = sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSpanProcessor(bsp),
+	)
+	otel.SetTracerProvider(tp)
+	return tp, nil
+}
+
+func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
+	return otlptracehttp.New(ctx)
+}
+
 func main() {
-    // use otelconfig to setup OpenTelemetry SDK
-    otelShutdown, err := otelconfig.ConfigureOpenTelemetry()
+    tp, err := initTracer()
     if err != nil {
         log.Fatalf("error setting up OTel SDK - %e", err)
     }
-    defer otelShutdown()
+    defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				log.Fatalf("Error shutting down tracer privider: %e", err)
+			}
+		}()
 
     // Initialize HTTP handler instrumentation
     wrapHandler()
