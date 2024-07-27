@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
@@ -19,6 +20,21 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 func errorHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
+func httpbinHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path[len("/httpbin"):]
+	targetURL := "https://httpbin.org/" + path
+
+	resp, err := http.Get(targetURL)
+	if err != nil {
+		http.Error(w, "Failed to fetch data from httpbin", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
 var tp *sdktrace.TracerProvider
@@ -60,5 +76,6 @@ func main() {
 
 	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler), "hello"))
 	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
+	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler), "httpbin"))
 	log.Fatal(http.ListenAndServe(":3030", mux))
 }
