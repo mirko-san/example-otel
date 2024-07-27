@@ -1,27 +1,27 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "net/http"
-		"context"
+	"context"
+	"fmt"
+	"log"
+	"net/http"
 
-		"go.opentelemetry.io/otel"
-		sdktrace "go.opentelemetry.io/otel/sdk/trace"
-		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-    "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // Implement an HTTP Handler func to be instrumented
 func httpHandler(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "Hello, World")
+	fmt.Fprintf(w, "Hello, World")
 }
 
 // Wrap the HTTP handler func with OTel HTTP instrumentation
 func wrapHandler() {
-    handler := http.HandlerFunc(httpHandler)
-    wrappedHandler := otelhttp.NewHandler(handler, "hello")
-    http.Handle("/hello", wrappedHandler)
+	handler := http.HandlerFunc(httpHandler)
+	wrappedHandler := otelhttp.NewHandler(handler, "hello")
+	http.Handle("/hello", wrappedHandler)
 }
 
 var tp *sdktrace.TracerProvider
@@ -48,18 +48,17 @@ func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
 }
 
 func main() {
-    tp, err := initTracer()
-    if err != nil {
-        log.Fatalf("error setting up OTel SDK - %e", err)
-    }
-    defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
-				log.Fatalf("Error shutting down tracer privider: %e", err)
-			}
-		}()
+	tp, err := initTracer()
+	if err != nil {
+		log.Fatalf("error setting up OTel SDK - %e", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Fatalf("Error shutting down tracer privider: %e", err)
+		}
+	}()
 
-    // Initialize HTTP handler instrumentation
-    wrapHandler()
-    log.Fatal(http.ListenAndServe(":3030", nil))
+	// Initialize HTTP handler instrumentation
+	wrapHandler()
+	log.Fatal(http.ListenAndServe(":3030", nil))
 }
-
