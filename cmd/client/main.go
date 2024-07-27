@@ -61,6 +61,7 @@ func main() {
 	client := http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 	var body []byte
+	var statusCode int
 
 	tr := otel.Tracer("example-otel/cmd/client")
 	err = func(ctx context.Context) error {
@@ -76,13 +77,16 @@ func main() {
 		body, err = io.ReadAll(res.Body)
 		_ = res.Body.Close()
 
+		statusCode = res.StatusCode
+
 		return err
 	}(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Response Received: %s\n\n\n", body)
+	fmt.Printf("Response Received: %s\n", body)
+	fmt.Printf("Response status: %d\n\n\n", statusCode)
 	fmt.Printf("Waiting for few seconds to export spans ...\n\n")
 	time.Sleep(10 * time.Second)
 	fmt.Printf("Inspect traces on otlptracehttp endpoint\n")
