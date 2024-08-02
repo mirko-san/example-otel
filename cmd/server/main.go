@@ -1,3 +1,5 @@
+// https://github.com/open-telemetry/opentelemetry-go-contrib/blob/main/instrumentation/net/http/otelhttp/example/server/server.go
+
 package main
 
 import (
@@ -11,6 +13,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -45,27 +48,27 @@ func httpbinHandler(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-var tp *sdktrace.TracerProvider
-
-// initTracer creates and registers trace provider instance.
 func initTracer() (*sdktrace.TracerProvider, error) {
-	ctx := context.Background()
-
-	exp, err := newExporter(ctx)
+	exp, err := newExporter()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize stdouttrace exporter: %w", err)
+		return nil, err
 	}
+
 	bsp := sdktrace.NewBatchSpanProcessor(exp)
-	tp = sdktrace.NewTracerProvider(
+
+	// For the demonstration, use sdktrace.AlwaysSample sampler to sample all traces.
+	// In a production application, use sdktrace.ProbabilitySampler with a desired probability.
+	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithSpanProcessor(bsp),
 	)
 	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	return tp, nil
 }
 
-func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
-	return otlptracehttp.New(ctx)
+func newExporter() (sdktrace.SpanExporter, error) {
+	return otlptracehttp.New(context.Background())
 }
 
 func main() {
@@ -77,7 +80,7 @@ func main() {
 	}
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Fatalf("Error shutting down tracer privider: %e", err)
+			log.Fatalf("Error shutting down tracer provider: %e", err)
 		}
 	}()
 

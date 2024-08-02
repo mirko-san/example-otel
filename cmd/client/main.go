@@ -12,44 +12,43 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
-	exporter, err := newExporter(ctx)
+func initTracer() (*sdktrace.TracerProvider, error) {
+	exp, err := newExporter()
 	if err != nil {
 		return nil, err
 	}
+
+	bsp := sdktrace.NewBatchSpanProcessor(exp)
 
 	// For the demonstration, use sdktrace.AlwaysSample sampler to sample all traces.
 	// In a production application, use sdktrace.ProbabilitySampler with a desired probability.
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithSpanProcessor(bsp),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	return tp, err
+	return tp, nil
 }
 
-func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
-	return otlptracehttp.New(ctx)
+func newExporter() (sdktrace.SpanExporter, error) {
+	return otlptracehttp.New(context.Background())
 }
 
 func main() {
-	ctx := context.Background()
-
-	tp, err := initTracer(ctx)
+	tp, err := initTracer()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error setting up OTel SDK - %e", err)
 	}
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down tracer provider: %v", err)
+			log.Fatalf("Error shutting down tracer provider: %e", err)
 		}
 	}()
 
@@ -62,8 +61,8 @@ func main() {
 	var statusCode int
 
 	tr := otel.Tracer("example-otel/cmd/client")
-	err = func(ctx context.Context) error {
-		ctx, span := tr.Start(ctx, "say hello")
+	err = func() error {
+		ctx, span := tr.Start(context.Background(), "request start")
 		defer span.End()
 		req, _ := http.NewRequestWithContext(ctx, "GET", *url, nil)
 
@@ -78,7 +77,7 @@ func main() {
 		statusCode = res.StatusCode
 
 		return err
-	}(ctx)
+	}()
 	if err != nil {
 		log.Fatal(err)
 	}
