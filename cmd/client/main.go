@@ -15,7 +15,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
 )
 
 func initTracer() (*sdktrace.TracerProvider, error) {
@@ -24,6 +26,11 @@ func initTracer() (*sdktrace.TracerProvider, error) {
 		return nil, err
 	}
 
+	resource := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("example-otel/client"),
+	)
+
 	bsp := sdktrace.NewBatchSpanProcessor(exp)
 
 	// For the demonstration, use sdktrace.AlwaysSample sampler to sample all traces.
@@ -31,6 +38,7 @@ func initTracer() (*sdktrace.TracerProvider, error) {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithSpanProcessor(bsp),
+		sdktrace.WithResource(resource),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
