@@ -17,8 +17,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
@@ -65,7 +63,7 @@ func main() {
 
 	tr := otel.Tracer("example-otel/cmd/client")
 	err = func(ctx context.Context) error {
-		ctx, span := tr.Start(ctx, "say hello", trace.WithAttributes(semconv.PeerService("ExampleService")))
+		ctx, span := tr.Start(ctx, "say hello")
 		defer span.End()
 		req, _ := http.NewRequestWithContext(ctx, "GET", *url, nil)
 
