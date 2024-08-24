@@ -39,7 +39,7 @@ func httpbinHandler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[len("/httpbin"):]
 	targetURL := "https://httpbin.org/" + path
 
-	resp, err := http.Get(targetURL)
+	resp, err := otelhttp.Get(r.Context(), targetURL)
 	if err != nil {
 		http.Error(w, "Failed to fetch data from httpbin", http.StatusInternalServerError)
 		return
