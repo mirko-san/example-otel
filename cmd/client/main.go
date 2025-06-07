@@ -7,8 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -50,13 +51,15 @@ func newExporter() (sdktrace.SpanExporter, error) {
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	tp, err := initTracer()
 	if err != nil {
-		log.Fatalf("error setting up OTel SDK - %e", err)
+		logger.Error(fmt.Sprintf("error setting up OTel SDK - %e", err))
 	}
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Fatalf("Error shutting down tracer provider: %e", err)
+			logger.Error(fmt.Sprintf("Error shutting down tracer provider: %e", err))
 		}
 	}()
 
@@ -71,7 +74,7 @@ func main() {
 	err = func() error {
 		req, _ := http.NewRequest("GET", *url, nil)
 
-		fmt.Printf("Sending request...\n")
+		logger.Info("Sending request...")
 		res, err := client.Do(req)
 		if err != nil {
 			panic(err)
@@ -84,11 +87,11 @@ func main() {
 		return err
 	}()
 	if err != nil {
-		log.Fatal(err)
+		logger.Error(err.Error())
 	}
 
-	fmt.Printf("Response Received: %s\n", body)
-	fmt.Printf("Response status: %d\n\n\n", statusCode)
+	logger.Info(fmt.Sprintf("Response Received: %s", body))
+	logger.Info(fmt.Sprintf("Response status: %d", statusCode))
 	fmt.Printf("Waiting for few seconds to export spans ...\n\n")
 	time.Sleep(10 * time.Second)
 	fmt.Printf("Inspect traces on otlptracehttp endpoint\n")

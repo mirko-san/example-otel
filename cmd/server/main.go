@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -80,15 +80,16 @@ func newExporter() (sdktrace.SpanExporter, error) {
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	serverPort := getEnv("EXAMPLE_SERVER_PORT", "3030")
 
 	tp, err := initTracer()
 	if err != nil {
-		log.Fatalf("error setting up OTel SDK - %e", err)
+		logger.Error(fmt.Sprintf("error setting up OTel SDK - %e", err))
 	}
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Fatalf("Error shutting down tracer provider: %e", err)
+			logger.Error(fmt.Sprintf("Error shutting down tracer provider: %e", err))
 		}
 	}()
 
@@ -98,5 +99,8 @@ func main() {
 	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler), "hello"))
 	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
 	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler), "httpbin"))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serverPort), mux))
+	err = http.ListenAndServe(fmt.Sprintf(":%s", serverPort), mux)
+	if err != nil {
+		logger.Error(err.Error())
+	}
 }
