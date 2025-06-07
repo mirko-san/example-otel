@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"os"
 
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
@@ -50,8 +53,8 @@ func httpbinHandler(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-func initTracer() (*sdktrace.TracerProvider, error) {
-	exp, err := newExporter()
+func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
+	exp, err := newTraceExporter(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -75,17 +78,45 @@ func initTracer() (*sdktrace.TracerProvider, error) {
 	return tp, nil
 }
 
-func newExporter() (sdktrace.SpanExporter, error) {
-	return otlptracehttp.New(context.Background())
+func initLogger(ctx context.Context) (*slog.Logger, error) {
+	exp, err := newLogExporter(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resource := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("example-otel/server"),
+	)
+
+	lp := sdklog.NewLoggerProvider(
+		sdklog.WithResource(resource),
+		sdklog.WithProcessor(sdklog.NewBatchProcessor(exp)),
+	)
+
+	logger := otelslog.NewLogger("example-otel/client", otelslog.WithLoggerProvider(lp))
+	return logger, nil
+}
+
+func newTraceExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
+	return otlptracehttp.New(ctx)
+}
+
+func newLogExporter(ctx context.Context) (sdklog.Exporter, error) {
+	return otlploghttp.New(ctx)
 }
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	ctx := context.Background()
+	logger, err := initLogger(ctx)
+	if err != nil {
+		panic(fmt.Sprintf("error setting up OTel Log SDK - %v", err))
+	}
 	serverPort := getEnv("EXAMPLE_SERVER_PORT", "3030")
 
-	tp, err := initTracer()
+	tp, err := initTracer(ctx)
 	if err != nil {
-		logger.Error(fmt.Sprintf("error setting up OTel SDK - %e", err))
+		logger.ErrorContext(ctx, fmt.Sprintf("error setting up OTel Trace SDK - %e", err))
 	}
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
