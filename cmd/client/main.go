@@ -101,8 +101,11 @@ func main() {
 	var body []byte
 	var statusCode int
 
+	tr := otel.Tracer("example-otel/cmd/client")
 	err = func() error {
-		req, _ := http.NewRequest("GET", *url, nil)
+		ctx, span := tr.Start(context.Background(), "Start request")
+		defer span.End()
+		req, _ := http.NewRequestWithContext(ctx, "GET", *url, nil)
 
 		logger.InfoContext(ctx, "Sending request...")
 		res, err := client.Do(req)

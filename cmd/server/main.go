@@ -30,27 +30,39 @@ func getEnv(key, fallback string) string {
 }
 
 // Implement an HTTP Handler func to be instrumented
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, World")
-}
-
-func errorHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-}
-
-func httpbinHandler(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path[len("/httpbin"):]
-	targetURL := "https://httpbin.org/" + path
-
-	resp, err := otelhttp.Get(r.Context(), targetURL)
-	if err != nil {
-		http.Error(w, "Failed to fetch data from httpbin", http.StatusInternalServerError)
-		return
+func helloHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger.InfoContext(ctx, "Received request")
+		fmt.Fprintf(w, "Hello, World")
 	}
-	defer resp.Body.Close()
+}
 
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+func errorHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger.InfoContext(ctx, "Received request")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func httpbinHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger.InfoContext(ctx, "Received request")
+		path := r.URL.Path[len("/httpbin"):]
+		targetURL := "https://httpbin.org/" + path
+
+		resp, err := otelhttp.Get(r.Context(), targetURL)
+		if err != nil {
+			http.Error(w, "Failed to fetch data from httpbin", http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+	}
 }
 
 func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
@@ -127,9 +139,9 @@ func main() {
 	// Initialize HTTP handler instrumentation
 	mux := http.NewServeMux()
 
-	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler), "hello"))
-	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler), "error"))
-	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler), "httpbin"))
+	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler(logger)), "hello"))
+	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler(logger)), "error"))
+	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler(logger)), "httpbin"))
 	err = http.ListenAndServe(fmt.Sprintf(":%s", serverPort), mux)
 	if err != nil {
 		logger.Error(err.Error())
