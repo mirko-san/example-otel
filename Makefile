@@ -13,8 +13,10 @@ help: ## Show help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: fmt
-fmt: ## Format
-	@go fmt ./...
+fmt: fmt-base fmt-with-trace-and-log ## Format
+
+fmt-base fmt-with-trace-and-log: fmt-%:
+	cd ./example/$* && go fmt ./...
 
 # image
 .PHONY: image-build
