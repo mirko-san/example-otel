@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-GO_VERSION := 1.22
+GO_VERSION := 1.24.3
 
 # BUILD_COMMAND を docker にしたら docker で動くかも
 BUILD_COMMAND := buildah
