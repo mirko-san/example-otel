@@ -22,6 +22,7 @@ fmt-base fmt-with-trace-and-log: fmt-%:
 .PHONY: image-build
 image-build: image-build-server image-build-client ## Build All Image
 
+# NOTE: example/with-trace-and-log のビルドのみ対応
 image-build-server image-build-client: image-build-%:
 	@${BUILD_COMMAND} build \
 		--format=docker \
