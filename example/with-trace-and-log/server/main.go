@@ -144,6 +144,6 @@ func main() {
 	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler(logger)), "httpbin"))
 	err = http.ListenAndServe(fmt.Sprintf(":%s", serverPort), mux)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.ErrorContext(ctx, err.Error())
 	}
 }
