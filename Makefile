@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-GO_VERSION := 1.22
+GO_VERSION := 1.24.3
 
 # BUILD_COMMAND を docker にしたら docker で動くかも
 BUILD_COMMAND := buildah
@@ -13,13 +13,16 @@ help: ## Show help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: fmt
-fmt: ## Format
-	@go fmt ./...
+fmt: fmt-base fmt-with-trace-and-log ## Format
+
+fmt-base fmt-with-trace-and-log: fmt-%:
+	cd ./example/$* && go fmt ./...
 
 # image
 .PHONY: image-build
 image-build: image-build-server image-build-client ## Build All Image
 
+# NOTE: example/with-trace-and-log のビルドのみ対応
 image-build-server image-build-client: image-build-%:
 	@${BUILD_COMMAND} build \
 		--format=docker \
