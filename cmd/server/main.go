@@ -76,7 +76,7 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 		semconv.ServiceName("example-otel/server"),
 	)
 
-	bsp := sdktrace.NewBatchSpanProcessor(exp)
+	bsp := sdktrace.NewSimpleSpanProcessor(exp)
 
 	// For the demonstration, use sdktrace.AlwaysSample sampler to sample all traces.
 	// In a production application, use sdktrace.ProbabilitySampler with a desired probability.
@@ -103,7 +103,7 @@ func initLogger(ctx context.Context) (*slog.Logger, error) {
 
 	lp := sdklog.NewLoggerProvider(
 		sdklog.WithResource(resource),
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(exp)),
+		sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)),
 	)
 
 	logger := otelslog.NewLogger("example-otel/client", otelslog.WithLoggerProvider(lp))
