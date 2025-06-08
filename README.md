@@ -4,28 +4,8 @@
 
 - go 1.24.3
 
-## usage
+## eample
 
-```
-$ cp .envrc.sample .envrc
-$ source .envrc
-```
-
-### sever
-
-```
-# default port :3030
-$ go run cmd/server/main.go
-```
-
-### client
-
-```
-# request to http://localhost:3030/hello
-$ go run cmd/client/main.go
-```
-
-```
-# customise URL
-$ go run cmd/client/main.go --server http://localhost:3030/httpbin/status/404
-```
+- base `example/base`
+  - without OTel
+- OTel trace and log `example/with_trace_and_log`

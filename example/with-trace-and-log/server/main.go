@@ -1,15 +1,14 @@
-// https://github.com/open-telemetry/opentelemetry-go-contrib/blob/main/instrumentation/net/http/otelhttp/example/client/client.go
+// https://github.com/open-telemetry/opentelemetry-go-contrib/blob/main/instrumentation/net/http/otelhttp/example/server/server.go
 
 package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
+	"os"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -23,6 +22,49 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
 )
 
+func getEnv(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return fallback
+}
+
+// Implement an HTTP Handler func to be instrumented
+func helloHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger.InfoContext(ctx, "Received request")
+		fmt.Fprintf(w, "Hello, World")
+	}
+}
+
+func errorHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger.InfoContext(ctx, "Received request")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func httpbinHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger.InfoContext(ctx, "Received request")
+		path := r.URL.Path[len("/httpbin"):]
+		targetURL := "https://httpbin.org/" + path
+
+		resp, err := otelhttp.Get(r.Context(), targetURL)
+		if err != nil {
+			http.Error(w, "Failed to fetch data from httpbin", http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+	}
+}
+
 func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	exp, err := newTraceExporter(ctx)
 	if err != nil {
@@ -31,10 +73,10 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 
 	resource := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceName("example-otel/client"),
+		semconv.ServiceName("example-otel/server"),
 	)
 
-	bsp := sdktrace.NewBatchSpanProcessor(exp)
+	bsp := sdktrace.NewSimpleSpanProcessor(exp)
 
 	// For the demonstration, use sdktrace.AlwaysSample sampler to sample all traces.
 	// In a production application, use sdktrace.ProbabilitySampler with a desired probability.
@@ -56,12 +98,12 @@ func initLogger(ctx context.Context) (*slog.Logger, error) {
 
 	resource := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceName("example-otel/client"),
+		semconv.ServiceName("example-otel/server"),
 	)
 
 	lp := sdklog.NewLoggerProvider(
 		sdklog.WithResource(resource),
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(exp)),
+		sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)),
 	)
 
 	logger := otelslog.NewLogger("example-otel/client", otelslog.WithLoggerProvider(lp))
@@ -82,6 +124,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("error setting up OTel Log SDK - %v", err))
 	}
+	serverPort := getEnv("EXAMPLE_SERVER_PORT", "3030")
 
 	tp, err := initTracer(ctx)
 	if err != nil {
@@ -93,39 +136,14 @@ func main() {
 		}
 	}()
 
-	url := flag.String("server", "http://localhost:3030/hello", "server url")
-	flag.Parse()
+	// Initialize HTTP handler instrumentation
+	mux := http.NewServeMux()
 
-	client := http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
-
-	var body []byte
-	var statusCode int
-
-	tr := otel.Tracer("example-otel/cmd/client")
-	err = func() error {
-		ctx, span := tr.Start(context.Background(), "Start request")
-		defer span.End()
-		req, _ := http.NewRequestWithContext(ctx, "GET", *url, nil)
-
-		logger.InfoContext(ctx, "Sending request...")
-		res, err := client.Do(req)
-		if err != nil {
-			panic(err)
-		}
-		body, err = io.ReadAll(res.Body)
-		_ = res.Body.Close()
-
-		statusCode = res.StatusCode
-
-		return err
-	}()
+	mux.Handle("/hello", otelhttp.NewHandler(http.HandlerFunc(helloHandler(logger)), "hello"))
+	mux.Handle("/error", otelhttp.NewHandler(http.HandlerFunc(errorHandler(logger)), "error"))
+	mux.Handle("/httpbin/", otelhttp.NewHandler(http.HandlerFunc(httpbinHandler(logger)), "httpbin"))
+	err = http.ListenAndServe(fmt.Sprintf(":%s", serverPort), mux)
 	if err != nil {
 		logger.ErrorContext(ctx, err.Error())
 	}
-
-	logger.InfoContext(ctx, fmt.Sprintf("Response Received: %s", body))
-	logger.InfoContext(ctx, fmt.Sprintf("Response status: %d", statusCode))
-	fmt.Printf("Waiting for few seconds to export spans ...\n\n")
-	time.Sleep(10 * time.Second)
-	fmt.Printf("Inspect traces on otlptracehttp endpoint\n")
 }

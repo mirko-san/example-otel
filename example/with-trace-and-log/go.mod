@@ -1,4 +1,4 @@
-module github.com/mirko-san/example-otel
+module github.com/mirko-san/example-otel/example/with-trace-and-log
 
 go 1.24.3
 
